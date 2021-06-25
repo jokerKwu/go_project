@@ -34,6 +34,7 @@ type Success struct{
 }
 type Posts []Post
 var rd *render.Render
+
 func (p Posts) Len() int{
 	return len(p)
 }
@@ -43,6 +44,7 @@ func (p Posts) Swap(i, j int){
 func (p Posts) Less(i, j int) bool{
 	return p[i].Id < p[j].Id
 }
+
 //게시물 수정
 func PutPostHandler(c echo.Context) (err error){
 	post := new(Post)
@@ -55,7 +57,6 @@ func PutPostHandler(c echo.Context) (err error){
 		return echo.NewHTTPError(http.StatusBadRequest,err.Error())
 	}
 	mdb := mongodb.GetClient()
-	//post 에 값이 들어갔다.
 	id, _ := strconv.Atoi(c.Param("id"))
 	postUpdated := mongodb.UpdatePost(mdb, post, bson.M{"id":id})
 	if postUpdated > 0{
@@ -68,10 +69,8 @@ func PutPostHandler(c echo.Context) (err error){
 //게시물 제거
 func DeletePostHandler(c echo.Context) error{
 	id, _ :=strconv.Atoi(c.Param("id"))
-
 	mdb := mongodb.GetClient()
 	postRemoved := mongodb.RemoveOnePost(mdb,bson.M{"id":id})
-
 	if postRemoved > 0{
 		return c.JSON(http.StatusOK, Success{true})
 	}else{
@@ -81,9 +80,7 @@ func DeletePostHandler(c echo.Context) error{
 
 //게시물 추가
 func PostPostHandler(c echo.Context) (err error) {
-	//var post Post
 	post := new(Post)
-
 	if err = c.Bind(post); err != nil{
 		c.Logger().Printf("PostPostHandler() - Bind Fail : " , post )
 		return echo.NewHTTPError(http.StatusBadRequest,err.Error())
@@ -92,7 +89,6 @@ func PostPostHandler(c echo.Context) (err error) {
 		c.Logger().Printf("PostPostHandler() - Validate Fail : ",post)
 		return echo.NewHTTPError(http.StatusBadRequest,err.Error())
 	}
-
 	p := mongodb.Post{post.Id,post.Title,post.Content,post.Author,post.Date}
 	mdb := mongodb.GetClient()
 	insertId := mongodb.InsertNewPost(mdb,p)
@@ -114,7 +110,6 @@ func GetPostHandler(c echo.Context) error{
 func GetPostListHandler(c echo.Context) error{
 	mdb := mongodb.GetClient()
 	posts := mongodb.ReturnPostList(mdb,bson.M{})
-	//게시물 데이터 가져와서 정렬 후 리스트 전달
 	list := make(Posts, 0)
 	for _, post := range posts{
 		p := Post{
