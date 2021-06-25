@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
@@ -56,9 +57,14 @@ func PutPostHandler(c echo.Context) (err error){
 		c.Logger().Printf("PutPostHandler() - Validate Fail : ",post)
 		return echo.NewHTTPError(http.StatusBadRequest,err.Error())
 	}
-	mdb := mongodb.GetClient()
+	mdb, err:= mongodb.GetClient()
+	if err != nil{
+		return c.JSON(http.StatusInternalServerError, nil)
+	}
 	id, _ := strconv.Atoi(c.Param("id"))
 	postUpdated := mongodb.UpdatePost(mdb, post, bson.M{"id":id})
+	mdb.Disconnect(context.Background())
+
 	if postUpdated > 0{
 		return c.JSON(http.StatusOK,Success{true})
 	}else{
@@ -69,9 +75,12 @@ func PutPostHandler(c echo.Context) (err error){
 //게시물 제거
 func DeletePostHandler(c echo.Context) error{
 	id, _ :=strconv.Atoi(c.Param("id"))
-	mdb := mongodb.GetClient()
-	postRemoved := mongodb.RemoveOnePost(mdb,bson.M{"id":id})
-	if postRemoved > 0{
+	mdb, err := mongodb.GetClient()
+	defer mdb.Disconnect(context.Background())
+	if err != nil{
+		return c.JSON(http.StatusInternalServerError, nil)
+	}
+	if postRemoved := mongodb.RemoveOnePost(mdb,bson.M{"id":id}); postRemoved > 0 {
 		return c.JSON(http.StatusOK, Success{true})
 	}else{
 		return c.JSON(http.StatusNotFound,Success{false})
@@ -90,25 +99,36 @@ func PostPostHandler(c echo.Context) (err error) {
 		return echo.NewHTTPError(http.StatusBadRequest,err.Error())
 	}
 	p := mongodb.Post{post.Id,post.Title,post.Content,post.Author,post.Date}
-	mdb := mongodb.GetClient()
+	mdb, err := mongodb.GetClient()
+	defer mdb.Disconnect(context.Background())
+	if err != nil{
+		return c.JSON(http.StatusInternalServerError,nil)
+	}
 	insertId := mongodb.InsertNewPost(mdb,p)
-	c.Logger().Print("생성 완료 : ", insertId)
+	c.Logger().Print("post create complete!! : ", insertId)
 	return c.JSON(http.StatusOK, p)
 }
 //게시물 조회
 func GetPostHandler(c echo.Context) error{
-	mdb := mongodb.GetClient()
+	mdb,err := mongodb.GetClient()
+	defer mdb.Disconnect(context.Background())
+	if err != nil{
+		return c.JSON(http.StatusInternalServerError,nil)
+	}
 	id,_ := strconv.Atoi(c.Param("id"))
-	post := mongodb.ReturnPostOne(mdb, bson.M{"id":id})
-	if post.Id == 0{
+	if post := mongodb.ReturnPostOne(mdb, bson.M{"id":id}); post.Id == 0{
 		return c.JSON(http.StatusBadRequest,nil)
-	}else {
+	}else{
 		return c.JSON(http.StatusOK, post)
 	}
 }
 // 게시물 리스트 조회
 func GetPostListHandler(c echo.Context) error{
-	mdb := mongodb.GetClient()
+	mdb,err := mongodb.GetClient()
+	defer mdb.Disconnect(context.Background())
+	if err != nil{
+		return c.JSON(http.StatusInternalServerError,nil)
+	}
 	posts := mongodb.ReturnPostList(mdb,bson.M{})
 	list := make(Posts, 0)
 	for _, post := range posts{
@@ -137,7 +157,6 @@ func main(){
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{echo.GET,echo.HEAD,echo.PUT,echo.PATCH,echo.POST,echo.DELETE},
 	}))
-
 	// Route -> handler register
 	// 1. 전체 조회 2. 조회 3. 생성 4. 수정 5. 삭제
 	e.GET("/posts", GetPostListHandler)
@@ -145,7 +164,6 @@ func main(){
 	e.POST("/posts",PostPostHandler)
 	e.PUT("/posts/:id",PutPostHandler)
 	e.DELETE("/posts/:id",DeletePostHandler)
-
 	// server start
 	e.Logger.Fatal(e.Start(":8080"))
 }
