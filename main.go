@@ -1,139 +1,156 @@
 package main
 
 import (
-	"encoding/json"
-	mux2 "github.com/gorilla/mux"
+	"github.com/go-playground/validator/v10"
+	"github.com/labstack/echo"
+	"github.com/labstack/echo/middleware"
 	"github.com/unrolled/render"
-	"github.com/urfave/negroni"
-	"log"
+	"go.mongodb.org/mongo-driver/bson"
+	mongodb "go_project/mongodb"
 	"net/http"
 	"sort"
 	"strconv"
-	"time"
 )
-
-type Post struct{
-	Id int	`json:"id"`
-	Title string `json:"title"`
-	Content string `json:"content"`
-	Author string `json:"author"`
-	Date string `json:"date"`
+type (
+	Post struct{
+		Id int	`json:"id" validate:"required"`
+		Title string `json:"title" validate:"required"`
+		Content string `json:"content" validate:"required"`
+		Author string `json:"author" validate:"required"`
+		Date string `json:"date" validate:"required"`
+	}
+	CustomValidator struct{
+		validator *validator.Validate
+	}
+)
+func (cv *CustomValidator) Validate(i interface{}) error{
+	if err := cv.validator.Struct(i); err != nil{
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return nil
 }
 type Success struct{
 	Success bool `json:"success"`
 }
-var posts map[int]Post	//게시물을 저장하는 맵형태 변수
-var lastId int
 type Posts []Post
 var rd *render.Render
-func MakeWebHandler() http.Handler{
-	mux := mux2.NewRouter()
-	mux.Handle("/",http.FileServer(http.Dir("public")))
-	//핸들러 등록 1. 전체 조회 , 2.조회, 3. 작성, 4. 삭제, 5. 수정
-	mux.HandleFunc("/posts",GetPostListHandler).Methods("GET")
-	mux.HandleFunc("/posts/{id:[0-9]+}",GetPostHandler).Methods("GET")
-	mux.HandleFunc("/posts",PostPostHandler).Methods("POST")
-	mux.HandleFunc("/posts/{id:[0-9]+}",DeletePostHandler).Methods("DELETE")
-	mux.HandleFunc("/posts/{id:[0-9]+}",PutPostHandler).Methods("PUT")
-
-	posts = make(map[int]Post)
-	posts[1] = Post{1,"title1","content1","Ryan",time.Now().Format("2006-01-02 15:05:05")}
-	posts[2] = Post{2,"title2","content2","Ryan",time.Now().Format("2006-01-02 15:05:05")}
-
-	lastId = 2
-	return mux
-}
-
 func (p Posts) Len() int{
 	return len(p)
 }
 func (p Posts) Swap(i, j int){
-	p[i], p[j] = p[i], p[i]
+	p[i], p[j] = p[j], p[i]
 }
 func (p Posts) Less(i, j int) bool{
 	return p[i].Id < p[j].Id
 }
 //게시물 수정
-func PutPostHandler(w http.ResponseWriter, r *http.Request){
-	var newPost Post
-	err := json.NewDecoder(r.Body).Decode(&newPost)
-	if err != nil{
-		log.Fatal(err)
-		w.WriteHeader(http.StatusBadRequest)
-		return
+func PutPostHandler(c echo.Context) (err error){
+	post := new(Post)
+	if err = c.Bind(post); err != nil{
+		c.Logger().Printf("PutPostHandler() - Bind Fail : " , post )
+		return echo.NewHTTPError(http.StatusBadRequest,err.Error())
 	}
-	vars := mux2.Vars(r)
-	id, _ := strconv.Atoi(vars["id"])
-	if post, ok := posts[id]; ok{
-		post.Content = newPost.Content
-		post.Title = newPost.Title
-		post.Author = newPost.Author
-		posts[id] = post
-		rd.JSON(w, http.StatusOK, Success{true})
+	if err = c.Validate(post); err != nil{
+		c.Logger().Printf("PutPostHandler() - Validate Fail : ",post)
+		return echo.NewHTTPError(http.StatusBadRequest,err.Error())
+	}
+	mdb := mongodb.GetClient()
+	//post 에 값이 들어갔다.
+	id, _ := strconv.Atoi(c.Param("id"))
+	postUpdated := mongodb.UpdatePost(mdb, post, bson.M{"id":id})
+	if postUpdated > 0{
+		return c.JSON(http.StatusOK,Success{true})
 	}else{
-		rd.JSON(w, http.StatusBadRequest,Success{false})
+		return c.JSON(http.StatusBadRequest,Success{false})
 	}
-
 }
 
 //게시물 제거
-func DeletePostHandler(w http.ResponseWriter, r *http.Request){
-	vars := mux2.Vars(r)
-	id, _ := strconv.Atoi(vars["id"])
-	if _, ok := posts[id]; ok{
-		delete(posts,id)
-		rd.JSON(w,http.StatusOK,Success{true})
+func DeletePostHandler(c echo.Context) error{
+	id, _ :=strconv.Atoi(c.Param("id"))
+
+	mdb := mongodb.GetClient()
+	postRemoved := mongodb.RemoveOnePost(mdb,bson.M{"id":id})
+
+	if postRemoved > 0{
+		return c.JSON(http.StatusOK, Success{true})
 	}else{
-		rd.JSON(w,http.StatusNotFound,Success{false})
+		return c.JSON(http.StatusNotFound,Success{false})
 	}
 }
 
 //게시물 추가
-func PostPostHandler(w http.ResponseWriter,r *http.Request){
-	var post Post
-	err := json.NewDecoder(r.Body).Decode(&post)
-	if err != nil{
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-	lastId++
-	post.Id = lastId
-	posts[lastId] = post
-	rd.JSON(w,http.StatusCreated,post)
-}
+func PostPostHandler(c echo.Context) (err error) {
+	//var post Post
+	post := new(Post)
 
+	if err = c.Bind(post); err != nil{
+		c.Logger().Printf("PostPostHandler() - Bind Fail : " , post )
+		return echo.NewHTTPError(http.StatusBadRequest,err.Error())
+	}
+	if err = c.Validate(post); err != nil{
+		c.Logger().Printf("PostPostHandler() - Validate Fail : ",post)
+		return echo.NewHTTPError(http.StatusBadRequest,err.Error())
+	}
+
+	p := mongodb.Post{post.Id,post.Title,post.Content,post.Author,post.Date}
+	mdb := mongodb.GetClient()
+	insertId := mongodb.InsertNewPost(mdb,p)
+	c.Logger().Print("생성 완료 : ", insertId)
+	return c.JSON(http.StatusOK, p)
+}
 //게시물 조회
-func GetPostHandler(w http.ResponseWriter, r *http.Request){
-	vars := mux2.Vars(r)
-	id, _ := strconv.Atoi(vars["id"])
-	post, ok := posts[id]
-
-	if !ok{
-		w.WriteHeader(http.StatusNotFound)
-		return
+func GetPostHandler(c echo.Context) error{
+	mdb := mongodb.GetClient()
+	id,_ := strconv.Atoi(c.Param("id"))
+	post := mongodb.ReturnPostOne(mdb, bson.M{"id":id})
+	if post.Id == 0{
+		return c.JSON(http.StatusBadRequest,nil)
+	}else {
+		return c.JSON(http.StatusOK, post)
 	}
-	rd.JSON(w, http.StatusOK, post)
 }
-
 // 게시물 리스트 조회
-func GetPostListHandler(w http.ResponseWriter,r *http.Request){
+func GetPostListHandler(c echo.Context) error{
+	mdb := mongodb.GetClient()
+	posts := mongodb.ReturnPostList(mdb,bson.M{})
+	//게시물 데이터 가져와서 정렬 후 리스트 전달
 	list := make(Posts, 0)
 	for _, post := range posts{
-		list = append(list, post)
+		p := Post{
+			post.Id,
+			post.Title,
+			post.Content,
+			post.Author,
+			post.Date,
+		}
+		list = append(list, p)
 	}
 	sort.Sort(list)
-	rd.JSON(w, http.StatusOK, list)
+	return c.JSON(http.StatusOK, list)
 }
-
 func main(){
-	rd = render.New()
-	m := MakeWebHandler()
-	n := negroni.Classic()
-	n.UseHandler(m)
+	//Echo Instance create
+	e := echo.New()
+	e.Validator = &CustomValidator{validator: validator.New()}
+	// Middleware
+	e.Use(middleware.Logger())
+	e.Use(middleware.Recover())
 
-	log.Println("Server start...")
-	err := http.ListenAndServe(":8080",MakeWebHandler())
-	if err != nil{
-		panic(err)
-	}
+	//CORS
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{"*"},
+		AllowMethods: []string{echo.GET,echo.HEAD,echo.PUT,echo.PATCH,echo.POST,echo.DELETE},
+	}))
+
+	// Route -> handler register
+	// 1. 전체 조회 2. 조회 3. 생성 4. 수정 5. 삭제
+	e.GET("/posts", GetPostListHandler)
+	e.GET("/posts/:id",GetPostHandler)
+	e.POST("/posts",PostPostHandler)
+	e.PUT("/posts/:id",PutPostHandler)
+	e.DELETE("/posts/:id",DeletePostHandler)
+
+	// server start
+	e.Logger.Fatal(e.Start(":8080"))
 }

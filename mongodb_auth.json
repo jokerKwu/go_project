@@ -1,0 +1,6 @@
+{
+  "username" : "[유저이름]",
+  "password" : "[비밀번호]",
+  "hostname" : "[접속IP]",
+  "port" : "[:접속포트]"
+}
