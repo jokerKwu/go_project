@@ -8,9 +8,12 @@ import (
 	"github.com/unrolled/render"
 	"go.mongodb.org/mongo-driver/bson"
 	mongodb "go_project/mongodb"
+	"html/template"
+	"io"
+	"io/ioutil"
 	"net/http"
-	"sort"
 	"strconv"
+	"strings"
 )
 type (
 	Post struct{
@@ -24,27 +27,47 @@ type (
 		validator *validator.Validate
 	}
 )
+type Success struct{
+	Success bool `json:"success"`
+}
+
+type Template struct {
+	templates *template.Template
+}
+//GetTempFilesFromFolders is scans file path
+func GetTempFilesFromFolders(folders []string) []string {
+	var filepaths []string
+	for _, folder := range folders {
+		files, _ := ioutil.ReadDir(folder)
+
+		for _, file := range files {
+			if strings.Contains(file.Name(), ".html") {
+				filepaths = append(filepaths, folder+file.Name())
+			}
+		}
+	}
+	return filepaths
+}
+//Render is function to use template function
+/*
+ template 기능을 사용하기 위한 함수
+ w : http.status
+ name : html 명
+ data : 전달하고자 하는 데이터
+*/
+func (t *Template) Render(w io.Writer, name string, data interface{}, c echo.Context) error {
+	return t.templates.ExecuteTemplate(w, name, data)
+}
+
+
 func (cv *CustomValidator) Validate(i interface{}) error{
 	if err := cv.validator.Struct(i); err != nil{
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	return nil
 }
-type Success struct{
-	Success bool `json:"success"`
-}
-type Posts []Post
 var rd *render.Render
 
-func (p Posts) Len() int{
-	return len(p)
-}
-func (p Posts) Swap(i, j int){
-	p[i], p[j] = p[j], p[i]
-}
-func (p Posts) Less(i, j int) bool{
-	return p[i].Id < p[j].Id
-}
 
 //게시물 수정
 func PutPostHandler(c echo.Context) (err error){
@@ -66,9 +89,9 @@ func PutPostHandler(c echo.Context) (err error){
 	mdb.Disconnect(context.Background())
 
 	if postUpdated > 0{
-		return c.JSON(http.StatusOK,Success{true})
+		return c.Render(http.StatusOK,"index.html",Success{true})
 	}else{
-		return c.JSON(http.StatusBadRequest,Success{false})
+		return c.Render(http.StatusBadRequest,"index.html",Success{false})
 	}
 }
 
@@ -78,12 +101,12 @@ func DeletePostHandler(c echo.Context) error{
 	mdb, err := mongodb.GetClient()
 	defer mdb.Disconnect(context.Background())
 	if err != nil{
-		return c.JSON(http.StatusInternalServerError, nil)
+		return c.Render(http.StatusInternalServerError,"error.html",Success{false})
 	}
 	if postRemoved := mongodb.RemoveOnePost(mdb,bson.M{"id":id}); postRemoved > 0 {
-		return c.JSON(http.StatusOK, Success{true})
+		return c.Render(http.StatusOK,"index.html",Success{true})
 	}else{
-		return c.JSON(http.StatusNotFound,Success{false})
+		return c.Render(http.StatusNotFound,"error.html",Success{false})
 	}
 }
 
@@ -102,24 +125,24 @@ func PostPostHandler(c echo.Context) (err error) {
 	mdb, err := mongodb.GetClient()
 	defer mdb.Disconnect(context.Background())
 	if err != nil{
-		return c.JSON(http.StatusInternalServerError,nil)
+		return c.Render(http.StatusInternalServerError,"error.html",Success{false})
 	}
 	insertId := mongodb.InsertNewPost(mdb,p)
 	c.Logger().Print("post create complete!! : ", insertId)
-	return c.JSON(http.StatusOK, p)
+	return c.Render(http.StatusOK,"index.html",Success{true})
 }
 //게시물 조회
 func GetPostHandler(c echo.Context) error{
 	mdb,err := mongodb.GetClient()
 	defer mdb.Disconnect(context.Background())
 	if err != nil{
-		return c.JSON(http.StatusInternalServerError,nil)
+		return c.Render(http.StatusInternalServerError,"error.html" ,nil)
 	}
 	id,_ := strconv.Atoi(c.Param("id"))
 	if post := mongodb.ReturnPostOne(mdb, bson.M{"id":id}); post.Id == 0{
-		return c.JSON(http.StatusBadRequest,nil)
+		return c.Render(http.StatusBadRequest,"error.html" ,nil)
 	}else{
-		return c.JSON(http.StatusOK, post)
+		return c.Render(http.StatusOK,"post_content.html",[]mongodb.Post{post})
 	}
 }
 // 게시물 리스트 조회
@@ -127,43 +150,54 @@ func GetPostListHandler(c echo.Context) error{
 	mdb,err := mongodb.GetClient()
 	defer mdb.Disconnect(context.Background())
 	if err != nil{
-		return c.JSON(http.StatusInternalServerError,nil)
+		return c.Render(http.StatusInternalServerError,"error.html",nil)
 	}
 	posts := mongodb.ReturnPostList(mdb,bson.M{})
-	list := make(Posts, 0)
-	for _, post := range posts{
-		p := Post{
-			post.Id,
-			post.Title,
-			post.Content,
-			post.Author,
-			post.Date,
-		}
-		list = append(list, p)
-	}
-	sort.Sort(list)
-	return c.JSON(http.StatusOK, list)
+	return c.Render(http.StatusOK,"index.html",posts)
 }
+
+func GetPostWriteHandler(c echo.Context) error{
+	//아이디 체크.
+	//...
+	return c.Render(http.StatusOK,"post_write.html",nil)
+}
+
 func main(){
+	dirs := []string{"./public/", "./public/static/include/"}
+	tempfiles := GetTempFilesFromFolders(dirs)
+	t := &Template{
+		templates: template.Must(template.ParseFiles(tempfiles...)),
+	}
+
+
 	//Echo Instance create
 	e := echo.New()
 	e.Validator = &CustomValidator{validator: validator.New()}
 	// Middleware
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
-
+	e.Static("/static/","public")
 	//CORS
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowOrigins: []string{"*"},
 		AllowMethods: []string{echo.GET,echo.HEAD,echo.PUT,echo.PATCH,echo.POST,echo.DELETE},
 	}))
-	// Route -> handler register
-	// 1. 전체 조회 2. 조회 3. 생성 4. 수정 5. 삭제
+	e.Static("/static/", "public")
+	e.Renderer = t
+
+	/*
+		Handler Register
+		1. 전체 조회 2. 조회 3. 생성 4. 수정 5. 삭제
+	 */
+	e.GET("/",GetPostListHandler)
 	e.GET("/posts", GetPostListHandler)
 	e.GET("/posts/:id",GetPostHandler)
 	e.POST("/posts",PostPostHandler)
 	e.PUT("/posts/:id",PutPostHandler)
 	e.DELETE("/posts/:id",DeletePostHandler)
+
+	//글작성 페이지 이동
+	e.GET("/posts/write",GetPostWriteHandler)
 	// server start
 	e.Logger.Fatal(e.Start(":8080"))
 }

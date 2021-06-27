@@ -1,0 +1,13 @@
+<html lang="ko">
+{{ template "head.html" }}
+<body>
+<h3>Login Fail...<br>
+  After 5 seconds, you will be returned to the Main page.</h3>
+<script>
+  setTimeout(function() {
+    window.location.href = "/";
+  }, 5000);
+</script>
+{{ template "script.html" }}
+</body>
+</html>

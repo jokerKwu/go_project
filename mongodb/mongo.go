@@ -6,6 +6,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
+	"sort"
 	"time"
 )
 type Post struct{
@@ -15,6 +16,17 @@ type Post struct{
 		Author string `json:"author" validate:"required"`
 		Date string `json:"date" validate:"required"`
 }
+type Posts []Post
+func (p Posts) Len() int{
+	return len(p)
+}
+func (p Posts) Swap(i, j int){
+	p[i], p[j] = p[j], p[i]
+}
+func (p Posts) Less(i, j int) bool{
+	return p[i].Id < p[j].Id
+}
+
 func GetClient() (*mongo.Client,error){
 	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
 	defer cancel()
@@ -26,10 +38,10 @@ func GetClient() (*mongo.Client,error){
 }
 
 //게시물 리스트 반환
-func ReturnPostList(client *mongo.Client, filter bson.M) []*Post {
+func ReturnPostList(client *mongo.Client, filter bson.M) []Post {
 	ctx, cancel := context.WithTimeout(context.Background(), 5 * time.Second)
 	defer cancel()
-	var posts []*Post
+	var posts Posts
 	collection := client.Database("webboard").Collection("posts")
 	cur, err := collection.Find(ctx, filter)
 	if err != nil{
@@ -41,8 +53,9 @@ func ReturnPostList(client *mongo.Client, filter bson.M) []*Post {
 		if err != nil{
 			log.Println("Error on Decoding the document",err)
 		}
-		posts = append(posts, &post)
+		posts = append(posts, post)
 	}
+	sort.Sort(posts)
 	return posts
 }
 //특정 게시물 리턴
