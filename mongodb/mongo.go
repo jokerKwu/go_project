@@ -14,7 +14,7 @@ type Post struct{
 		Title string `json:"title" bson:"title" validate:"required"`
 		Content string `json:"content" bson:"content" validate:"required"`
 		Author string `json:"author" bson:"author" validate:"required"`
-		Date string `json:"date" bson:"date" validate:"required"`
+		Date time.Time `json:"date" bson:"date" validate:"omitempty"'`
 }
 type PostID struct{
 	Seq int `json:"seq" validate:"required"`
@@ -76,8 +76,7 @@ func InsertNewPost(client *mongo.Client, post Post) interface{}{
 	ctx,cancel := context.WithTimeout(context.Background(),5 *time.Second)
 	defer cancel()
 	collection := client.Database("webboard").Collection("posts")
-	nowTime := time.Now().Format("2006-01-02 15:11:11")
-	post.Date = nowTime
+	post.Date = time.Now()
 
 	var postid PostID
 	collection2 := client.Database("webboard").Collection("counters")

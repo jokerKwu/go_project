@@ -15,18 +15,10 @@ import (
 	"strconv"
 	"strings"
 )
-type (
-	Post struct{
-		Id int	`json:"id" validate:"required"`
-		Title string `json:"title" validate:"required"`
-		Content string `json:"content" validate:"required"`
-		Author string `json:"author" validate:"required"`
-		Date string `json:"date" validate:"required"`
-	}
-	CustomValidator struct{
+type CustomValidator struct{
 		validator *validator.Validate
 	}
-)
+
 type Success struct{
 	Success bool `json:"success"`
 }
@@ -71,7 +63,7 @@ var rd *render.Render
 
 //게시물 수정
 func PutPostHandler(c echo.Context) (err error){
-	post := new(Post)
+	post := new(mongodb.Post)
 	if err = c.Bind(post); err != nil{
 		c.Logger().Printf("PutPostHandler() - Bind Fail : " , post )
 		return echo.NewHTTPError(http.StatusBadRequest,err.Error())
@@ -114,7 +106,7 @@ func DeletePostHandler(c echo.Context) error{
 
 //게시물 추가
 func PostPostHandler(c echo.Context) (err error) {
-	post := new(Post)
+	post := new(mongodb.Post)
 	if err = c.Bind(post); err != nil{
 		c.Logger().Printf("PostPostHandler() - Bind Fail : " , post )
 		return echo.NewHTTPError(http.StatusBadRequest,err.Error())
@@ -162,7 +154,7 @@ func GetPostListHandler(c echo.Context) error{
 func GetPostWriteHandler(c echo.Context) error{
 	//아이디 체크.
 	//...
-	return c.Render(http.StatusOK,"post_write.html",[]mongodb.Post{})
+	return c.Render(http.StatusOK,"post_write.html",nil)
 }
 func GetPostUpdateHandler(c echo.Context) error{
 	mdb,err := mongodb.GetClient()
