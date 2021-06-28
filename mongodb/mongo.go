@@ -10,11 +10,14 @@ import (
 	"time"
 )
 type Post struct{
-		Id int	`json:"id" validate:"required"`
-		Title string `json:"title" validate:"required"`
-		Content string `json:"content" validate:"required"`
-		Author string `json:"author" validate:"required"`
-		Date string `json:"date" validate:"required"`
+		Id int	`json:"id" bson:"id" validate:"required"`
+		Title string `json:"title" bson:"title" validate:"required"`
+		Content string `json:"content" bson:"content" validate:"required"`
+		Author string `json:"author" bson:"author" validate:"required"`
+		Date string `json:"date" bson:"date" validate:"required"`
+}
+type PostID struct{
+	Seq int `json:"seq" validate:"required"`
 }
 type Posts []Post
 func (p Posts) Len() int{
@@ -24,7 +27,7 @@ func (p Posts) Swap(i, j int){
 	p[i], p[j] = p[j], p[i]
 }
 func (p Posts) Less(i, j int) bool{
-	return p[i].Id < p[j].Id
+	return p[i].Id > p[j].Id
 }
 
 func GetClient() (*mongo.Client,error){
@@ -73,6 +76,16 @@ func InsertNewPost(client *mongo.Client, post Post) interface{}{
 	ctx,cancel := context.WithTimeout(context.Background(),5 *time.Second)
 	defer cancel()
 	collection := client.Database("webboard").Collection("posts")
+	nowTime := time.Now().Format("2006-01-02 15:11:11")
+	post.Date = nowTime
+
+	var postid PostID
+	collection2 := client.Database("webboard").Collection("counters")
+	res := collection2.FindOne(ctx,bson.M{})
+	res.Decode(&postid)
+	post.Id = postid.Seq + 1
+	collection2.UpdateOne(ctx,bson.M{"id":"postid"},bson.M{"$set":bson.M{"seq":postid.Seq+1}})
+
 	insertResult, err := collection.InsertOne(ctx,post)
 	if err != nil{
 		log.Println("Error on inserting new post", err)

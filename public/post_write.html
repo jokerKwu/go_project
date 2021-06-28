@@ -1,10 +1,73 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>글작성</title>
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+    <title>board</title>
+    <script>
+        $(document).on('click', '#btnSave', function(e){
+            e.preventDefault();
+            $("#form").submit();
+        });
+        $(document).on('click', '#btnList', function(e){
+            e.preventDefault();
+            location.href="/posts";
+        });
+    </script>
+    <style>
+        body {
+            padding-top: 70px;
+            padding-bottom: 30px;
+        }
+    </style>
 </head>
 <body>
-    글쓰는곳
+<article>
+    <div class="container" role="main">
+        <h2>board Form</h2>
+        <form name="form" id="form" role="form" method="POST" action="/posts">
+            {{range .}}
+            <input type="text" name="id" id="id" value="{{.Id}}" hidden/>
+            <input type="text" name="date" id="date" value="2021-06-28 15:30:33" hidden/>
+
+            <div class="mb-3">
+                <label for="title">제목</label>
+                <input type="text" class="form-control" name="title" id="title" placeholder="제목을 입력해 주세요" value="{{.Title}}">
+            </div>
+            <div class="mb-3">
+                <label for="author">작성자</label>
+                <input type="text" class="form-control" name="author" id="author" placeholder="이름을 입력해 주세요" value="{{.Author}}">
+            </div>
+            <div class="mb-3">
+                <label for="content">내용</label>
+                <textarea class="form-control" rows="5" name="content" id="content" placeholder="내용을 입력해 주세요">{{.Content}}</textarea>
+            </div>
+            {{ else }}
+            <input type="text" name="id"  value ="1" hidden/>
+            <input type="text" name="date" value="2021-06-12 15:00:00"  hidden/>
+
+            <div class="mb-3">
+                <label for="title">제목</label>
+                <input type="text" class="form-control" name="title"  placeholder="제목을 입력해 주세요" >
+            </div>
+            <div class="mb-3">
+                <label for="author">작성자</label>
+                <input type="text" class="form-control" name="author" placeholder="이름을 입력해 주세요" >
+            </div>
+            <div class="mb-3">
+                <label for="content">내용</label>
+                <textarea class="form-control" rows="5" name="content"placeholder="내용을 입력해 주세요"></textarea>
+            </div>
+
+            {{end}}
+
+        </form>
+        <div >
+            <button type="button" class="btn btn-sm btn-primary" id="btnSave">저장</button>
+            <button type="button" class="btn btn-sm btn-primary" id="btnList">목록</button>
+        </div>
+    </div>
+</article>
 </body>
 </html>

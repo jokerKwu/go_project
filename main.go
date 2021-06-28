@@ -81,17 +81,18 @@ func PutPostHandler(c echo.Context) (err error){
 		return echo.NewHTTPError(http.StatusBadRequest,err.Error())
 	}
 	mdb, err:= mongodb.GetClient()
+	defer mdb.Disconnect(context.Background())
 	if err != nil{
 		return c.JSON(http.StatusInternalServerError, nil)
 	}
 	id, _ := strconv.Atoi(c.Param("id"))
 	postUpdated := mongodb.UpdatePost(mdb, post, bson.M{"id":id})
-	mdb.Disconnect(context.Background())
+	posts := mongodb.ReturnPostList(mdb,bson.M{})
 
 	if postUpdated > 0{
-		return c.Render(http.StatusOK,"index.html",Success{true})
+		return c.Render(http.StatusOK,"index.html",posts)
 	}else{
-		return c.Render(http.StatusBadRequest,"index.html",Success{false})
+		return c.Render(http.StatusBadRequest,"index.html",posts)
 	}
 }
 
@@ -103,8 +104,9 @@ func DeletePostHandler(c echo.Context) error{
 	if err != nil{
 		return c.Render(http.StatusInternalServerError,"error.html",Success{false})
 	}
+	posts := mongodb.ReturnPostList(mdb,bson.M{})
 	if postRemoved := mongodb.RemoveOnePost(mdb,bson.M{"id":id}); postRemoved > 0 {
-		return c.Render(http.StatusOK,"index.html",Success{true})
+		return c.Render(http.StatusOK,"index.html",posts)
 	}else{
 		return c.Render(http.StatusNotFound,"error.html",Success{false})
 	}
@@ -129,7 +131,8 @@ func PostPostHandler(c echo.Context) (err error) {
 	}
 	insertId := mongodb.InsertNewPost(mdb,p)
 	c.Logger().Print("post create complete!! : ", insertId)
-	return c.Render(http.StatusOK,"index.html",Success{true})
+	posts := mongodb.ReturnPostList(mdb,bson.M{})
+	return c.Render(http.StatusOK,"index.html",posts)
 }
 //게시물 조회
 func GetPostHandler(c echo.Context) error{
@@ -159,7 +162,20 @@ func GetPostListHandler(c echo.Context) error{
 func GetPostWriteHandler(c echo.Context) error{
 	//아이디 체크.
 	//...
-	return c.Render(http.StatusOK,"post_write.html",nil)
+	return c.Render(http.StatusOK,"post_write.html",[]mongodb.Post{})
+}
+func GetPostUpdateHandler(c echo.Context) error{
+	mdb,err := mongodb.GetClient()
+	defer mdb.Disconnect(context.Background())
+	if err != nil{
+		return c.Render(http.StatusInternalServerError,"error.html" ,nil)
+	}
+	id,_ := strconv.Atoi(c.Param("id"))
+	if post := mongodb.ReturnPostOne(mdb, bson.M{"id":id}); post.Id == 0{
+		return c.Render(http.StatusBadRequest,"error.html" ,nil)
+	}else{
+		return c.Render(http.StatusOK,"post_write.html",[]mongodb.Post{post})
+	}
 }
 
 func main(){
@@ -168,7 +184,6 @@ func main(){
 	t := &Template{
 		templates: template.Must(template.ParseFiles(tempfiles...)),
 	}
-
 
 	//Echo Instance create
 	e := echo.New()
@@ -198,6 +213,7 @@ func main(){
 
 	//글작성 페이지 이동
 	e.GET("/posts/write",GetPostWriteHandler)
+	e.GET("/posts/write/:id",GetPostUpdateHandler)
 	// server start
 	e.Logger.Fatal(e.Start(":8080"))
 }
