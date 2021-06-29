@@ -72,6 +72,10 @@ func ReturnPostOne(client *mongo.Client, filter bson.M) Post {
 	collection := client.Database("webboard").Collection("posts")
 	documentReturned := collection.FindOne(ctx, filter)
 	documentReturned.Decode(&post)
+	documentReturned := collection.FindOne(ctx,filter)
+	if err := documentReturned.Decode(&post); err != nil{
+		log.Println(err)
+	}
 	return post
 }
 

@@ -42,7 +42,6 @@ func GetTempFilesFromFolders(folders []string) []string {
 	}
 	return filepaths
 }
-
 //Render is function to use template function
 /*
  template 기능을 사용하기 위한 함수
@@ -132,6 +131,9 @@ func PostPostHandler(c echo.Context) (err error) {
 //게시물 조회
 func GetPostHandler(c echo.Context) error {
 	mdb, err := mongodb.GetClient()
+func GetPostHandler(c echo.Context) error{
+	c.Logger().Printf("GET으로 오나")
+	mdb,err := mongodb.GetClient()
 	defer mdb.Disconnect(context.Background())
 	if err != nil {
 		return c.Render(http.StatusInternalServerError, "error.html", nil)
@@ -171,7 +173,26 @@ func GetPostUpdateHandler(c echo.Context) error {
 		return c.Render(http.StatusBadRequest, "error.html", nil)
 	} else {
 		return c.Render(http.StatusOK, "post_write.html", []mongodb.Post{post})
+	id,_ := strconv.Atoi(c.Param("id"))
+	if post := mongodb.ReturnPostOne(mdb, bson.M{"id":id}); post.Id == 0{
+		return c.Render(http.StatusBadRequest,"error.html" ,nil)
+	}else{
+		return c.Render(http.StatusOK,"post_update.html",[]mongodb.Post{post})
 	}
+}
+func GetLoginPageHandler(c echo.Context) error{
+	return c.Render(http.StatusOK,"login.html",nil)
+}
+func GetJoinPageHandler(c echo.Context) error{
+	return c.Render(http.StatusOK,"join.html",nil)
+}
+func GetLoginHandler(c echo.Context) error{
+	//로그인 처리
+	return nil
+}
+func GetJoinHandler(c echo.Context) error{
+	//회원가입 처리
+	return nil
 }
 
 func main() {
@@ -206,10 +227,21 @@ func main() {
 	e.POST("/posts", PostPostHandler)
 	e.PUT("/posts/:id", PutPostHandler)
 	e.DELETE("/posts/:id", DeletePostHandler)
+	e.GET("/posts/:id",GetPostHandler)
+	e.POST("/posts",PostPostHandler)
+	e.POST("/posts/:id",PutPostHandler)
+	e.DELETE("/posts/:id",DeletePostHandler)
+	// 로그인 및 회원가입
+	e.GET("/login",GetLoginHandler)
+	e.GET("/join",GetJoinHandler)
 
 	//글작성 페이지 이동
 	e.GET("/posts/write", GetPostWriteHandler)
 	e.GET("/posts/write/:id", GetPostUpdateHandler)
+	e.GET("/posts/write",GetPostWriteHandler)
+	e.GET("/posts/write/:id",GetPostUpdateHandler)
+	e.GET("/loginpage",GetLoginPageHandler)
+	e.GET("/joinpage",GetJoinPageHandler)
 	// server start
 	e.Logger.Fatal(e.Start(":8080"))
 }

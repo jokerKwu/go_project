@@ -27,41 +27,20 @@
     <div class="container" role="main">
         <h2>board Form</h2>
         <form name="form" id="form" role="form" method="POST" action="/posts">
-            {{range .}}
-            <input type="text" name="id" id="id" value="{{.Id}}" hidden/>
+            <input type="text" name="id" id="id" value="1" hidden/>
             <input type="text" name="date" id="date" value="2021-06-28 15:30:33" hidden/>
-
             <div class="mb-3">
-                <label for="title">제목</label>
-                <input type="text" class="form-control" name="title" id="title" placeholder="제목을 입력해 주세요" value="{{.Title}}">
-            </div>
-            <div class="mb-3">
-                <label for="author">작성자</label>
-                <input type="text" class="form-control" name="author" id="author" placeholder="이름을 입력해 주세요" value="{{.Author}}">
-            </div>
-            <div class="mb-3">
-                <label for="content">내용</label>
-                <textarea class="form-control" rows="5" name="content" id="content" placeholder="내용을 입력해 주세요">{{.Content}}</textarea>
-            </div>
-            {{ else }}
-            <input type="text" name="id"  value ="1" hidden/>
-            <input type="text" name="date" value="2021-06-12 15:00:00"  hidden/>
-
-            <div class="mb-3">
-                <label for="title">제목</label>
+                <label>제목</label>
                 <input type="text" class="form-control" name="title"  placeholder="제목을 입력해 주세요" >
             </div>
             <div class="mb-3">
-                <label for="author">작성자</label>
+                <label>작성자</label>
                 <input type="text" class="form-control" name="author" placeholder="이름을 입력해 주세요" >
             </div>
             <div class="mb-3">
-                <label for="content">내용</label>
+                <label>내용</label>
                 <textarea class="form-control" rows="5" name="content"placeholder="내용을 입력해 주세요"></textarea>
             </div>
-
-            {{end}}
-
         </form>
         <div >
             <button type="button" class="btn btn-sm btn-primary" id="btnSave">저장</button>
