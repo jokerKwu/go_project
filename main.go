@@ -170,6 +170,20 @@ func GetPostUpdateHandler(c echo.Context) error{
 		return c.Render(http.StatusOK,"post_update.html",[]mongodb.Post{post})
 	}
 }
+func GetLoginPageHandler(c echo.Context) error{
+	return c.Render(http.StatusOK,"login.html",nil)
+}
+func GetJoinPageHandler(c echo.Context) error{
+	return c.Render(http.StatusOK,"join.html",nil)
+}
+func GetLoginHandler(c echo.Context) error{
+	//로그인 처리
+	return nil
+}
+func GetJoinHandler(c echo.Context) error{
+	//회원가입 처리
+	return nil
+}
 
 func main(){
 	dirs := []string{"./public/", "./public/static/include/"}
@@ -203,10 +217,15 @@ func main(){
 	e.POST("/posts",PostPostHandler)
 	e.POST("/posts/:id",PutPostHandler)
 	e.DELETE("/posts/:id",DeletePostHandler)
+	// 로그인 및 회원가입
+	e.GET("/login",GetLoginHandler)
+	e.GET("/join",GetJoinHandler)
 
 	//글작성 페이지 이동
 	e.GET("/posts/write",GetPostWriteHandler)
 	e.GET("/posts/write/:id",GetPostUpdateHandler)
+	e.GET("/loginpage",GetLoginPageHandler)
+	e.GET("/joinpage",GetJoinPageHandler)
 	// server start
 	e.Logger.Fatal(e.Start(":8080"))
 }
