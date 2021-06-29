@@ -27,7 +27,6 @@
     <div class="container" role="main">
         <h2>board Form</h2>
         {{range .}}
-        <div>{{.Id}}</div>
         <form name="form" id="form" role="form" method="POST" action="/posts/{{.Id}}">
             <input type="hidden" name="_method" value="PUT"/>
 

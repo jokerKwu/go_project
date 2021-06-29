@@ -68,7 +68,9 @@ func ReturnPostOne(client *mongo.Client, filter bson.M) Post {
 	var post Post
 	collection := client.Database("webboard").Collection("posts")
 	documentReturned := collection.FindOne(ctx,filter)
-	documentReturned.Decode(&post)
+	if err := documentReturned.Decode(&post); err != nil{
+		log.Println(err)
+	}
 	return post
 }
 //게시물 생성
