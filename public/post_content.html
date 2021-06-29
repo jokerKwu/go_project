@@ -5,32 +5,10 @@
     <title>board</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
     <script src="https://code.jquery.com/jquery-3.4.1.js"></script>
-
-    <style type="text/css">
+    <style>
         body {
             padding-top: 70px;
             padding-bottom: 30px;
-        }
-        .board_title {
-            font-weight : 700;
-            font-size : 22pt;
-            margin : 10pt;
-        }
-        .board_info_box {
-            color : #6B6B6B;
-            margin : 10pt;
-        }
-        .board_author {
-            font-size : 10pt;
-            margin-right : 10pt;
-        }
-        .board_date {
-            font-size : 10pt;
-        }
-        .board_content {
-            color : #444343;
-            font-size : 12pt;
-            margin : 10pt;
         }
     </style>
 </head>
@@ -40,13 +18,19 @@
     {{$id := .Id}}
     <div class="container" role="main">
         <h2>board Content</h2>
-        <div class="bg-white rounded shadow-sm">
-            <div class="board_title">{{.Title}}</div>
-            <div class="board_info_box">
-                <span class="board_author">{{.Author}}</span><span class="board_date">{{.Date}}</span>
-            </div>
-            <div class="board_content">{{.Content}}</div>
+        <div class="mb-3">
+            <label>제목</label>
+            <input type="text" class="form-control" name="title" value="{{.Title}}" readonly>
         </div>
+        <div class="mb-3">
+            <label>작성자</label>
+            <input type="text" class="form-control" name="author"value="{{.Author}}" readonly>
+        </div>
+        <div class="mb-3">
+            <label>내용</label>
+            <textarea class="form-control" rows="5" name="content"placeholder="내용을 입력해 주세요" readonly> {{.Content}}</textarea>
+        </div>
+
         <div style="margin-top : 20px">
             <button type="button" class="btn btn-sm btn-primary" id="btnUpdate" onclick="postUpdate(`{{$id}}`);">수정</button>
             <button type="button" class="btn btn-sm btn-primary" id="btnDelete" onclick="postDelete(`{{$id}}`);">삭제</button>

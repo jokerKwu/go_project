@@ -128,6 +128,7 @@ func PostPostHandler(c echo.Context) (err error) {
 }
 //게시물 조회
 func GetPostHandler(c echo.Context) error{
+	c.Logger().Printf("GET으로 오나")
 	mdb,err := mongodb.GetClient()
 	defer mdb.Disconnect(context.Background())
 	if err != nil{
@@ -166,7 +167,7 @@ func GetPostUpdateHandler(c echo.Context) error{
 	if post := mongodb.ReturnPostOne(mdb, bson.M{"id":id}); post.Id == 0{
 		return c.Render(http.StatusBadRequest,"error.html" ,nil)
 	}else{
-		return c.Render(http.StatusOK,"post_write.html",[]mongodb.Post{post})
+		return c.Render(http.StatusOK,"post_update.html",[]mongodb.Post{post})
 	}
 }
 
@@ -200,7 +201,7 @@ func main(){
 	e.GET("/posts", GetPostListHandler)
 	e.GET("/posts/:id",GetPostHandler)
 	e.POST("/posts",PostPostHandler)
-	e.PUT("/posts/:id",PutPostHandler)
+	e.POST("/posts/:id",PutPostHandler)
 	e.DELETE("/posts/:id",DeletePostHandler)
 
 	//글작성 페이지 이동
