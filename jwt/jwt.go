@@ -17,7 +17,6 @@ const(
 
 // RefreshToken 토큰갱신: 성공하면 access 토큰과 refresh 토큰을 모두 다시 출력한다.
 func PostAccessToken(c echo.Context) error {
-
 	accessToken :=c.Request().Header.Get("access_token")
 	refreshToken := c.Request().Header.Get("refresh_token")
 	aToken, err := jwt.Parse(accessToken, func(token *jwt.Token) (interface{}, error) {
