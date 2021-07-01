@@ -72,6 +72,8 @@ github.com/pmezard/go-difflib/difflib
 # github.com/stretchr/testify v1.6.1
 ## explicit
 github.com/stretchr/testify/assert
+# github.com/twinj/uuid v1.0.0
+## explicit
 # github.com/unrolled/render v1.4.0
 ## explicit
 github.com/unrolled/render

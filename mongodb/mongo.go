@@ -17,6 +17,10 @@ type Post struct {
 	Author  string    `json:"author" bson:"author" validate:"required"`
 	Date    time.Time `json:"date" bson:"date" validate:"omitempty"'`
 }
+type User struct {
+	Userid   string `json:"userid" bson:"userid" validate:"required"`
+	Password string `json:"password" bson:"password" validate:"required"`
+}
 type PostID struct {
 	Seq int `json:"seq" validate:"required"`
 }
@@ -72,8 +76,7 @@ func ReturnPostOne(client *mongo.Client, filter bson.M) Post {
 	collection := client.Database("webboard").Collection("posts")
 	documentReturned := collection.FindOne(ctx, filter)
 	documentReturned.Decode(&post)
-	documentReturned := collection.FindOne(ctx,filter)
-	if err := documentReturned.Decode(&post); err != nil{
+	if err := documentReturned.Decode(&post); err != nil {
 		log.Println(err)
 	}
 	return post
@@ -123,4 +126,29 @@ func UpdatePost(client *mongo.Client, updateData interface{}, filter bson.M) int
 		log.Println("Error on updating one post", err)
 	}
 	return updateResult.ModifiedCount
+}
+
+//게시물 생성
+func InsertNewUser(client *mongo.Client, user User) interface{} {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	collection := client.Database("webboard").Collection("users")
+	insertResult, err := collection.InsertOne(ctx, user)
+	if err != nil {
+		log.Println("Error on inserting new post", err)
+	}
+	return insertResult.InsertedID
+}
+
+//유저 아이디 조회
+func ReturnUserOne(client *mongo.Client, filter bson.M) User {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var user User
+	collection := client.Database("webboard").Collection("users")
+	documentReturned := collection.FindOne(ctx, filter)
+	if err := documentReturned.Decode(&user); err != nil {
+		log.Println(err)
+	}
+	return user
 }
