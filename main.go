@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo"
@@ -18,12 +18,6 @@ import (
 	"strings"
 	"time"
 )
-// jwtCustomClaims are custom claims extending default ones.
-type jwtCustomClaims struct {
-	Userid  string `json:"userid"`
-	Admin bool   `json:"admin"`
-	jwt.StandardClaims
-}
 
 type CustomValidator struct{
 		validator *validator.Validate
@@ -218,12 +212,12 @@ func PostLoginHandler(c echo.Context) (err error) {
 	access_cookie := new(http.Cookie)
 	access_cookie.Name = "access_token"
 	access_cookie.Value = tokens["access_token"]
-	access_cookie.Expires = time.Now().Add(time.Hour * 1)
+	access_cookie.Expires = time.Now().Add(time.Hour * 10)
 
 	refresh_cookie := new(http.Cookie)
 	refresh_cookie.Name = "refresh_token"
 	refresh_cookie.Value = tokens["refresh_token"]
-	refresh_cookie.Expires = time.Now().Add(time.Hour * 24)
+	refresh_cookie.Expires = time.Now().Add(time.Hour * 24*7)
 
 	//3. 클라이언트에게 엑세스, 리프레쉬 토큰을 발급해준다.
 	c.SetCookie(access_cookie)
@@ -232,49 +226,6 @@ func PostLoginHandler(c echo.Context) (err error) {
 	posts := mongodb.ReturnPostList(mdb,bson.M{})
 	return c.Render(http.StatusOK,"index.html",posts)
 }
-
-//리프레시 토큰 생성 핸들러
-func token(c echo.Context) error {
-	type tokenReqBody struct {
-		RefreshToken string `json:"refresh_token"`
-	}
-	tokenReq := tokenReqBody{}
-	c.Bind(&tokenReq)
-
-	// Parse takes the token string and a function for looking up the key.
-	// The latter is especially useful if you use multiple keys for your application.
-	// The standard is to use 'kid' in the head of the token to identify
-	// which key to use, but the parsed token (head and claims) is provided
-	// to the callback, providing flexibility.
-	token, err := jwt.Parse(tokenReq.RefreshToken, func(token *jwt.Token) (interface{}, error) {
-		// Don't forget to validate the alg is what you expect:
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
-
-		// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
-		return []byte("secret"), nil
-	})
-
-	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		// Get the user record from database or
-		// run through your business logic to verify if the user can log in
-		if int(claims["sub"].(float64)) == 1 {
-
-			newTokenPair, err := generateTokenPair()
-			if err != nil {
-				return err
-			}
-
-			return c.JSON(http.StatusOK, newTokenPair)
-		}
-
-		return echo.ErrUnauthorized
-	}
-
-	return err
-}
-
 //토큰 생성 함수
 func generateTokenPair() (map[string]string, error){
 	//Create token
@@ -285,9 +236,9 @@ func generateTokenPair() (map[string]string, error){
 	claims["sub"] = 1
 	claims["userid"] = "ryan"
 	claims["admin"] = true
-	claims["exp"] = time.Now().Add(time.Hour * 1).Unix()
-
+	claims["exp"] = time.Now().Add(time.Hour * 240).Unix()
 	t, err := token.SignedString([]byte("secret"))
+
 	if err != nil{
 		return nil, err
 	}
@@ -300,6 +251,7 @@ func generateTokenPair() (map[string]string, error){
 	rtClaims["admin"] = true
 
 	rt, err := refreshToken.SignedString([]byte("secret"))
+
 	if err != nil{
 		return nil, err
 	}
@@ -354,32 +306,71 @@ func main(){
 	e.Static("/static/", "public")
 	e.Renderer = t
 
+	//권한이 필요하지 않는 핸들러
+	// 로그인 및 회원가입
+	e.GET("/", GetPostListHandler)
+	e.POST("/login",PostLoginHandler)
+	e.POST("/join",PostJoinHandler)
+	//글작성 페이지 이동
+	e.GET("/loginpage",GetLoginPageHandler)
+	e.GET("/joinpage",GetJoinPageHandler)
+
 	//Custom JWT
-	e.POST("/token",token)
-	r := e.Group("/posts")
+	r := e.Group("/posts",func(h echo.HandlerFunc) echo.HandlerFunc{
+		return func(c echo.Context) error{
+			//토큰 가져오고
+			tokenString := c.Request().Header.Get("access_token")
+			c.Logger().Printf("token 보내는지 체크 ",tokenString)
+			if tokenString == ""{
+				return errors.New("토큰이 비어잇다.")
+			}
+			//여기서 토큰이 유효한지 체크
+			token, err := jwt.Parse(tokenString, func(token *jwt.Token)(interface{}, error){
+				claims := token.Claims.(jwt.MapClaims)
+				if claims["userid"] != "ryan"{
+					return nil, errors.New("User isvalid")
+				}
+				c.Logger().Print("userid = ", claims["userid"])
+				c.Logger().Print("admin = ", claims["admin"])
+				c.Logger().Print("exp = ",claims["exp"])
+
+				return []byte("secret"), nil
+			})
+
+			if err != nil{
+				return err
+			}
+			//컨텍스트에 데이터 저장
+			c.Set("userid",token.Claims.(jwt.MapClaims)["userid"])
+			c.Logger().Print(c.Get("userid"))
+			return h(c)
+		}
+	})
+	{
+		r.GET("/posts/:id",GetPostHandler)
+		r.POST("/posts",PostPostHandler)
+		r.POST("/posts/:id",PutPostHandler)
+		r.DELETE("/posts/:id",DeletePostHandler)
+		r.GET("/posts/write",GetPostWriteHandler)
+		r.GET("/posts/write/:id",GetPostUpdateHandler)
+	}
+
 	r.Use(middleware.JWTWithConfig(
 		middleware.JWTConfig{
 			SigningMethod: "HS256",
 			SigningKey: []byte("secret"),
 			TokenLookup: "cookie:access_token",
 		}))
+	/*
 	//권한이 필요한 핸들러
-	e.GET("/posts/:id",GetPostHandler)
-	e.POST("/posts",PostPostHandler)
-	e.POST("/posts/:id",PutPostHandler)
-	e.DELETE("/posts/:id",DeletePostHandler)
-	e.GET("/posts/write",GetPostWriteHandler)
-	e.GET("/posts/write/:id",GetPostUpdateHandler)
+	r.GET("/posts/:id",GetPostHandler)
+	r.POST("/posts",PostPostHandler)
+	r.POST("/posts/:id",PutPostHandler)
+	r.DELETE("/posts/:id",DeletePostHandler)
+	r.GET("/posts/write",GetPostWriteHandler)
+	r.GET("/posts/write/:id",GetPostUpdateHandler)
+	*/
 
-	//권한이 필요하지 않는 핸들러
-	// 로그인 및 회원가입
-	e.GET("/", GetPostListHandler)
-	e.POST("/login",PostLoginHandler)
-	e.POST("/join",PostJoinHandler)
-
-	//글작성 페이지 이동
-	e.GET("/loginpage",GetLoginPageHandler)
-	e.GET("/joinpage",GetJoinPageHandler)
 	// server start
 	e.Logger.Fatal(e.Start(":8080"))
 }
