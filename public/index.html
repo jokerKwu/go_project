@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+    <script src="https://code.jquery.com/jquery-3.1.1.min.js"></script>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
     <title>Title</title>
-
     <style type="text/css">
         *{
             box-sizing: border-box;
@@ -66,16 +65,30 @@
             </tbody>
         </table>
         <div>
-            <button type="button" class="btn btn-sm btn-primary" id="btnWriteForm">글쓰기</button>
+            <button type="button" class="btn btn-sm btn-primary" id="btnWriteForm" onclick="postWrite()">글쓰기</button>
         </div>
     </div>
 </div>
 <div class="col-lg-12" id="ex1_Result1" ></div>
 <script>
-    $(document).on('click', '#btnWriteForm', function(e){
-        e.preventDefault();
-        location.href="/posts/write";
-    });
+
+    function getCookie(name) {
+        var value = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+        return value? value[2] : null;
+    }
+
+    function postWrite(){
+        let token = "";
+        token = getCookie("access_token");
+        $.ajax({
+            type:'GET',
+            url: '/posts/write',
+            headers:{'access_token':token},
+            error:function(request,status,error){
+                alert(request.status);
+            }
+        })
+    }
     // 테이블의 Row 클릭시 값 가져오기
     $("#table_board tr").click(function(){
         var tdArr = new Array();	// 배열 선언
@@ -85,7 +98,16 @@
             tdArr.push(td.eq(i).text());
         });
         var id = td.eq(0).text().toString().trim();
-        location.href="/posts/"+id;
+        let token = "";
+        token = getCookie("access_token");
+        $.ajax({
+            type:'GET',
+            url: '/posts/'+id,
+            headers:{'access_token':token},
+            error:function(request,status,error){
+                alert(request.status);
+            }
+        })
     });
     //로그인 버튼
     $('#btnLogin').click(function(){
