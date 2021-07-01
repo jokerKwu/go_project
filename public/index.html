@@ -84,25 +84,11 @@
             type:'GET',
             url: '/posts/write',
             headers:{'access_token':token},
-            dataType:'text',
-            success:function(data){
-                alert(token);
-                location.href='/posts/write';
-            },
             error:function(request,status,error){
                 alert(request.status);
             }
-        }).done(function(date){
-            alert(token);
         })
     }
-/*
-    $(document).on('click', '#btnWriteForm', function(e){
-        e.preventDefault();
-        location.href="/posts/write";
-    });
-
- */
     // 테이블의 Row 클릭시 값 가져오기
     $("#table_board tr").click(function(){
         var tdArr = new Array();	// 배열 선언
@@ -112,7 +98,16 @@
             tdArr.push(td.eq(i).text());
         });
         var id = td.eq(0).text().toString().trim();
-        location.href="/posts/"+id;
+        let token = "";
+        token = getCookie("access_token");
+        $.ajax({
+            type:'GET',
+            url: '/posts/'+id,
+            headers:{'access_token':token},
+            error:function(request,status,error){
+                alert(request.status);
+            }
+        })
     });
     //로그인 버튼
     $('#btnLogin').click(function(){

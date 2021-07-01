@@ -152,7 +152,11 @@ func GetPostListHandler(c echo.Context) error{
 
 //게시글 작성 페이지 이동
 func GetPostWriteHandler(c echo.Context) error{
-	return c.Render(http.StatusOK,"post_write.html",nil)
+	c.Logger().Print("여기 ㄷㄹ어오는데 ")
+	tokenString := c.Request().Header.Get("access_token")
+	c.Logger().Print(" ============ ",tokenString)
+//	return c.Render(http.StatusOK,"post_write.html",nil)
+	return c.JSON(http.StatusOK, "welcome")
 }
 
 //게시글 수정 페이지 이동
@@ -284,6 +288,7 @@ func PostJoinHandler(c echo.Context) (err error){
 	return nil
 }
 
+
 func main(){
 	dirs := []string{"./public/", "./public/static/include/"}
 	tempfiles := GetTempFilesFromFolders(dirs)
@@ -320,7 +325,6 @@ func main(){
 		return func(c echo.Context) error{
 			//토큰 가져오고
 			tokenString := c.Request().Header.Get("access_token")
-			c.Logger().Printf("token 보내는지 체크 ",tokenString)
 			if tokenString == ""{
 				return errors.New("토큰이 비어잇다.")
 			}
@@ -340,36 +344,20 @@ func main(){
 			if err != nil{
 				return err
 			}
-			//컨텍스트에 데이터 저장
+			//컨텍스트에 사용자 아이디 저장
 			c.Set("userid",token.Claims.(jwt.MapClaims)["userid"])
-			c.Logger().Print(c.Get("userid"))
 			return h(c)
 		}
 	})
-	{
-		r.GET("/posts/:id",GetPostHandler)
-		r.POST("/posts",PostPostHandler)
-		r.POST("/posts/:id",PutPostHandler)
-		r.DELETE("/posts/:id",DeletePostHandler)
-		r.GET("/posts/write",GetPostWriteHandler)
-		r.GET("/posts/write/:id",GetPostUpdateHandler)
+	{	//권한이 필요한 핸들러
+		r.GET("/:id", GetPostHandler)
+		r.POST("", PostPostHandler)
+		r.POST("/:id", PutPostHandler)
+		r.DELETE("/:id", DeletePostHandler)
+		r.GET("/write", GetPostWriteHandler)
+		r.GET("/write/:id", GetPostUpdateHandler)
 	}
 
-	r.Use(middleware.JWTWithConfig(
-		middleware.JWTConfig{
-			SigningMethod: "HS256",
-			SigningKey: []byte("secret"),
-			TokenLookup: "cookie:access_token",
-		}))
-	/*
-	//권한이 필요한 핸들러
-	r.GET("/posts/:id",GetPostHandler)
-	r.POST("/posts",PostPostHandler)
-	r.POST("/posts/:id",PutPostHandler)
-	r.DELETE("/posts/:id",DeletePostHandler)
-	r.GET("/posts/write",GetPostWriteHandler)
-	r.GET("/posts/write/:id",GetPostUpdateHandler)
-	*/
 
 	// server start
 	e.Logger.Fatal(e.Start(":8080"))
