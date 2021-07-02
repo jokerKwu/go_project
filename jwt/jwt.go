@@ -1,109 +1,153 @@
 package jwt
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/labstack/echo"
-	"math/rand"
-	"net/http"
-	"strconv"
+	"go_project/utils"
 	"time"
 )
 
 const(
-	ACCESS_TOKEN_EXP = 1			// HOUR
+	ACCESS_TOKEN_EXP = 1
 	REFRESH_TOKEN_EXP = 24 * 7
 )
 
-// RefreshToken 토큰갱신: 성공하면 access 토큰과 refresh 토큰을 모두 다시 출력한다.
-func PostAccessToken(c echo.Context) error {
-	accessToken :=c.Request().Header.Get("access_token")
-	refreshToken := c.Request().Header.Get("refresh_token")
-	aToken, err := jwt.Parse(accessToken, func(token *jwt.Token) (interface{}, error) {
-		// 클라이언트로 받은 토큰이 HMAC 알고리즘이 맞는지 확인
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte("secret"), nil
-	})
-	if err != nil {
-		return err
-	}
-	// 토큰을 분석하고 유효한지 검증하고 *jwt.Token 객체로 반환한다.
-	// KeyFunc 은 sceret key를 반환해야 한다.
-	rToken, err := jwt.Parse(refreshToken, func(token *jwt.Token) (interface{}, error) {
-		// 클라이언트로 받은 토큰이 HMAC 알고리즘이 맞는지 확인
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte("secret"), nil
-	})
-	if err != nil {
-		return err
-	}
-
-	// Claims 생성
-	aClaims, ok := aToken.Claims.(jwt.MapClaims)
-	rClaims, ok := rToken.Claims.(jwt.MapClaims)
-
-	//처음 만들때 true로 설정하기 때문에 확인 가능
-	if !ok || !rToken.Valid || !aToken.Valid{
-		if !rToken.Valid{
-			fmt.Println(rToken.Valid)
-		}else {
-			return echo.ErrInternalServerError
-		}
-	}
-	// 발급할때의 토큰제목과 일치하는지 체크
-	if aClaims["sub"].(string) != rClaims["sub"].(string) {
-		return echo.ErrBadRequest
-	}
-	// 재발급
-	tokens, err := GenerateTokenPair(rClaims["userid"].(string))
-	if err != nil {
-		return err
-	}
-	// 출력
-	return c.JSON(http.StatusOK, map[string]string{
-		"access_token":  tokens["access_token"],
-		"refresh_token": tokens["refresh_token"],
-	})
+//jwt session data
+type TokenData struct{
+	UserID string `json:"userid" validate:"required"`
 }
 
+
+type TokenMetaData struct{
+	IssuedAt int64
+	ExpiredAt int64
+}
+
+//claim 데이타
+type jwtClaim struct{
+	UID string `json:"uid" validate:"required"`
+	jwt.StandardClaims
+}
+
+
 //토큰 생성 함수
-func GenerateTokenPair(name string) (map[string]string, error){
-	timeSource := rand.NewSource(time.Now().UnixNano())
-	random := rand.New(timeSource)
-	value := random.Intn(100000000)
-
+func GenerateTokenPair(ctx context.Context, tokenData TokenData) (string, string,TokenMetaData, error){
+	createTime := time.Now()
 	//Create token
-	token := jwt.New(jwt.SigningMethodHS256)
-
-	//Set claims
-	claims := token.Claims.(jwt.MapClaims)
-	claims["sub"] = name + strconv.Itoa(value)
-	claims["userid"] = name
-	claims["admin"] = true
-//	claims["exp"] = time.Now().Add(time.Hour * ACCESS_TOKEN_EXP).Unix()
-	claims["exp"] = time.Now().Add(time.Second * 30).Unix()
-	fmt.Println(claims["exp"])
-	t, err := token.SignedString([]byte("secret"))
-
+	accessToken, accessTokenMetaData, err := jwtCreate(ctx,tokenData,createTime,1)
 	if err != nil{
-		return nil, err
+		return "","",TokenMetaData{},err
 	}
 
-	refreshToken := jwt.New(jwt.SigningMethodHS256)
-	rtClaims := refreshToken.Claims.(jwt.MapClaims)
-	rtClaims["sub"] = name + strconv.Itoa(value)
-	rtClaims["exp"] = time.Now().Add(time.Hour * REFRESH_TOKEN_EXP).Unix()
-	rtClaims["admin"] = true
-	rtClaims["userid"] = name
-	rt, err := refreshToken.SignedString([]byte("secret"))
-
+	refreshToken, _, err := jwtCreate(ctx,tokenData,createTime,REFRESH_TOKEN_EXP)
 	if err != nil{
-		return nil, err
+		return "","",TokenMetaData{},err
 	}
+	return accessToken,refreshToken,accessTokenMetaData,nil
+}
 
-	return map[string]string{"access_token": t, "refresh_token":rt},nil
+func GenerateAccessToken(ctx context.Context,tokenData TokenData ) (string,TokenMetaData, error){
+	createTime := time.Now()
+	accessToken,accessTokenMetaData, err := jwtCreate(ctx,tokenData,createTime,ACCESS_TOKEN_EXP)
+	if err != nil{
+		return "",TokenMetaData{},err
+	}
+	return accessToken, accessTokenMetaData, nil
+}
+func GenerateRefreshToken(ctx context.Context,tokenData TokenData)(string,TokenMetaData,error){
+	createTime := time.Now()
+	refreshToken,refreshTokenMetaData, err := jwtCreate(ctx,tokenData,createTime,REFRESH_TOKEN_EXP)
+	if err != nil{
+		return "",TokenMetaData{},err
+	}
+	return refreshToken, refreshTokenMetaData, nil
+}
+
+func TokenVerifyBoth(ctx context.Context,accessTokenString string, refreshTokenString string, isForRefresh bool) (TokenData,TokenMetaData,TokenData,TokenMetaData,error){
+	accessTokenData, accessTokenMetaData, err := TokenVerifyAccess(ctx, accessTokenString,isForRefresh)
+	if err != nil{
+		return TokenData{},TokenMetaData{},TokenData{},TokenMetaData{},err
+	}
+	refreshTokenData, refreshTokenMetaData, err := TokenVerifyAccess(ctx, refreshTokenString,isForRefresh)
+	if err != nil{
+		return TokenData{},TokenMetaData{},TokenData{},TokenMetaData{},err
+	}
+	if accessTokenData.UserID != refreshTokenData.UserID || accessTokenMetaData.IssuedAt != refreshTokenMetaData.IssuedAt{
+		return TokenData{},TokenMetaData{},TokenData{},TokenMetaData{},err
+	}
+	return accessTokenData,accessTokenMetaData,refreshTokenData,refreshTokenMetaData,nil
+}
+
+func TokenVerifyAccess(ctx context.Context, tokenString string, isAllowExpire bool) (TokenData,TokenMetaData,error){
+	tokenData, tokenMetaData, iErr := jwtVerify(ctx, tokenString, isAllowExpire)
+	if iErr != nil {
+		return TokenData{}, TokenMetaData{}, iErr
+	}
+	return tokenData, tokenMetaData, nil
+}
+func TokenVerifyRefresh(ctx context.Context, tokenString string) (TokenData,TokenMetaData,error){
+	tokenData,tokenMetaData, err := jwtVerify(ctx, tokenString, false)
+	if err != nil{
+		return TokenData{},TokenMetaData{},err
+	}
+	return tokenData,tokenMetaData,nil
+}
+
+func jwtCreate(ctx context.Context,tokenData TokenData, createTime time.Time,expireHour time.Duration) (string,TokenMetaData,error){
+	//validate struct
+	if err := utils.ValidateStruct(tokenData) ;err != nil{
+		return "",TokenMetaData{}, err
+	}
+	//create jwt
+	tokenMetaData := TokenMetaData{
+		IssuedAt: createTime.Unix(),
+		ExpiredAt: createTime.Add(time.Hour * expireHour).Unix(),
+	}
+	claimStd := jwt.StandardClaims{
+		IssuedAt: tokenMetaData.IssuedAt,
+		ExpiresAt: tokenMetaData.ExpiredAt,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256,jwtClaim{
+		tokenData.UserID,
+		claimStd,
+	})
+
+	tokenSigned, err := token.SignedString([]byte("secret"))
+	if err != nil{
+		return "",TokenMetaData{},err
+	}
+	return tokenSigned,tokenMetaData,nil
+}
+func jwtVerify(ctx context.Context,tokenString string, isAllowExpire bool) (TokenData,TokenMetaData,error){
+	claims := &jwtClaim{}
+	token, err := jwt.ParseWithClaims(tokenString,claims, func(token *jwt.Token)(interface{},error){
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok{
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+		JWTkey := []byte("secret")
+		return JWTkey , nil
+	})
+	//에러가 있거나 토큰이 유효하지 않는 경우
+	if err != nil || !token.Valid{
+		if err == nil{
+			return TokenData{},TokenMetaData{},errors.New("jwt now valid")
+		}
+		if v, ok := err.(*jwt.ValidationError); !isAllowExpire || !ok || v.Errors != jwt.ValidationErrorExpired|| claims.ExpiresAt >= time.Now().Unix(){
+			return TokenData{},TokenMetaData{},errors.New("jwt now valid")
+		}
+	}
+	//validate claim format
+	if err := utils.Val.Struct(claims); err != nil{
+		return TokenData{},TokenMetaData{},err
+	}
+	tokenData := TokenData{
+		UserID: claims.UID,
+	}
+	tokenMetaData := TokenMetaData{
+		IssuedAt: claims.IssuedAt,
+		ExpiredAt: claims.ExpiresAt,
+	}
+	return tokenData,tokenMetaData,nil
 }

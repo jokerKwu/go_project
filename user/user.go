@@ -6,6 +6,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	j "go_project/jwt"
 	"go_project/mongodb"
+	"go_project/utils"
 	"net/http"
 	"time"
 )
@@ -22,6 +23,7 @@ func GetJoinPageHandler(c echo.Context) error{
 
 //로그인 핸들러
 func PostLoginHandler(c echo.Context) (err error) {
+	ctx := utils.CtxGenerate(c.Request(), "", "")
 	//1.요청으로부터 받은 사용자 정보를 디비 체킹한다.
 	user := new(mongodb.User)
 	if err = c.Bind(user); err != nil{
@@ -43,7 +45,8 @@ func PostLoginHandler(c echo.Context) (err error) {
 		return echo.ErrUnauthorized
 	}
 	//2.액세스,리프레시 토큰을 생성한다.
-	tokens, err := j.GenerateTokenPair(user.Userid)
+
+	accessToken,refreshToken, _, err := j.GenerateTokenPair(ctx ,j.TokenData{user.Userid})
 	if err != nil{
 		return err
 	}
@@ -51,12 +54,12 @@ func PostLoginHandler(c echo.Context) (err error) {
 	// 토큰 쿠키에 저장
 	access_cookie := new(http.Cookie)
 	access_cookie.Name = "access_token"
-	access_cookie.Value = tokens["access_token"]
+	access_cookie.Value = accessToken
 	access_cookie.Expires = time.Now().Add(time.Hour * 10)
 
 	refresh_cookie := new(http.Cookie)
 	refresh_cookie.Name = "refresh_token"
-	refresh_cookie.Value = tokens["refresh_token"]
+	refresh_cookie.Value = refreshToken
 	refresh_cookie.Expires = time.Now().Add(time.Hour * 24*7)
 
 	//3. 클라이언트에게 엑세스, 리프레쉬 토큰을 발급해준다.

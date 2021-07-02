@@ -1,74 +1,61 @@
-package main
+package middleware
 
 import (
-"fmt"
-"github.com/labstack/echo"
-_ "github.com/labstack/echo/middleware"
-"net/http"
+	"errors"
+	"github.com/labstack/echo"
+	j "go_project/jwt"
+	"go_project/utils"
+	"net/http"
 )
-
-func main() {
-
-	e := echo.New();
-	e.GET("/", func(c echo.Context) error {
-		fmt.Println("핸들러")
-		return c.String(http.StatusOK, "hello Wolrd")
-	})
-
-	a := e.Group("/a", func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			fmt.Println("a그룹 미들웨어 시작")
-			err := next(c)
-			fmt.Println("a그룹 미들웨어 종료")
-			return err
+func AuthToken(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		ctx := utils.CtxGenerate(c.Request(), "", "")
+		// get jwt Token
+		accessToken := c.Request().Header.Get("access_token")
+		if accessToken == "" {
+			return c.JSON(http.StatusBadRequest,errors.New( "no access code in header"))
 		}
-	})
 
-	a.GET("/b", func(c echo.Context) error {
-		fmt.Println("핸들러 a")
-		return c.String(http.StatusOK, "bb")
-	})
-
-	a.GET("/b/b", func(c echo.Context) error {
-		fmt.Println("핸들러 aa")
-		return c.String(http.StatusOK, "bbbb")
-	}, func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			fmt.Println("Route 미들웨어 시작")
-			err := next(c)
-			fmt.Println("Route 미들웨어 종료")
-			return err
+		// verify & get Data
+		tokenData, _, err := j.TokenVerifyAccess(ctx, accessToken, false)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, errors.New("token invalid"))
 		}
-	})
-
-	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			fmt.Println("Pre 1번 미들웨어 시작")
-			err := next(c)
-			fmt.Println("Pre 1번 미들웨어 종료")
-			return err
-		}
-	})
-
-	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			fmt.Println("Pre 2번 미들웨어 시작")
-			err := next(c)
-			fmt.Println("Pre 2번 미들웨어 종료")
-			return err
-		}
-	})
-
-	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			fmt.Println("미들웨어 시작")
-			fmt.Println(c.Path())
-			err := next(c)
-			fmt.Println("미들웨어 종료")
-			return err
-		}
-	})
-
-	e.Start(":8080")
-
+		c.Set("userid",tokenData.UserID)
+		return next(c)
+	}
 }
+/*
+func AuthToekn(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		//토큰 가져오고
+		tokenString := c.Request().Header.Get("access_token")
+		if tokenString == "" {
+			return c.JSON(http.StatusBadRequest, errors.New("token empty"))
+		}
+		//여기서 토큰이 유효한지 체크
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			claims := token.Claims.(jwt.MapClaims)
+			fmt.Println(claims["exp"])
+			fmt.Println(claims["userid"])
+			if claims["userid"] != "test01" {
+				return c.JSON(http.StatusBadRequest, errors.New("user isvalid")), nil
+			}
+			return []byte("secret"), nil
+		})
+		//토큰이 유효하지 않다면 (만료시간 및 signature 체크)
+		//리프레쉬 토큰을 요청한다.
+		if err != nil {
+			if err == jwt.ErrSignatureInvalid {
+				return c.JSON(http.StatusUnauthorized, nil)
+			} else {
+				return c.JSON(http.StatusNotAcceptable, false)
+			}
+		}
+		//컨텍스트에 사용자 아이디 저장
+		c.Set("userid", token.Claims.(jwt.MapClaims)["userid"])
+		return next(c)
+	}
+}
+
+ */

@@ -1,14 +1,11 @@
 package main
 
 import (
-	"errors"
-	"fmt"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/go-playground/validator/v10"
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	"github.com/unrolled/render"
-	j "go_project/jwt"
+	m "go_project/middleware"
 	p "go_project/post"
 	"go_project/user"
 	"html/template"
@@ -62,7 +59,6 @@ func main(){
 	t := &Template{
 		templates: template.Must(template.ParseFiles(tempfiles...)),
 	}
-
 	//Echo Instance create
 	e := echo.New()
 	e.Validator = &CustomValidator{validator: validator.New()}
@@ -83,43 +79,12 @@ func main(){
 	e.GET("/", p.GetPostListHandler)
 	e.POST("/login", user.PostLoginHandler)
 	e.POST("/join", user.PostJoinHandler)
-	e.POST("/token",j.PostAccessToken)
 	//글작성 페이지 이동
 	e.GET("/loginpage", user.GetLoginPageHandler)
 	e.GET("/joinpage", user.GetJoinPageHandler)
 
 	//Custom JWT
-	r := e.Group("/posts",func(h echo.HandlerFunc) echo.HandlerFunc{
-		return func(c echo.Context) error{
-			//토큰 가져오고
-			tokenString := c.Request().Header.Get("access_token")
-			if tokenString == ""{
-				return errors.New("토큰이 비어잇다.")
-			}
-			//여기서 토큰이 유효한지 체크
-			token, err := jwt.Parse(tokenString, func(token *jwt.Token)(interface{}, error){
-				claims := token.Claims.(jwt.MapClaims)
-				fmt.Println(claims["exp"])
-				fmt.Println(claims["userid"])
-				if claims["userid"] != "test01"{
-					return nil, errors.New("User isvalid")
-				}
-				return []byte("secret"), nil
-			})
-			//토큰이 유효하지 않다면 (만료시간 및 signature 체크)
-			//리프레쉬 토큰을 요청한다.
-			if err != nil{
-				if err == jwt.ErrSignatureInvalid{
-					return c.JSON(http.StatusUnauthorized,nil)
-				}else{
-					return c.JSON(http.StatusNotAcceptable, false)
-				}
-			}
-			//컨텍스트에 사용자 아이디 저장
-			c.Set("userid",token.Claims.(jwt.MapClaims)["userid"])
-			return h(c)
-		}
-	})
+	r := e.Group("/posts",m.AuthToken)
 	{	//권한이 필요한 핸들러
 		r.GET("/:id", p.GetPostHandler)
 		r.POST("", p.PostPostHandler)
